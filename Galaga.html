@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Galaga Pro</title>
+    <style>
+        body { margin: 0; background: #050505; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; color: white; font-family: 'Courier New', Courier, monospace; }
+        canvas { border: 2px solid #333; background: #000; cursor: none; }
+        #ui { position: absolute; top: 20px; left: 20px; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h2 id="score">Score: 0</h2>
+        <div id="msg">Press SPACE to Start</div>
+    </div>
+    <canvas id="gameCanvas" width="600" height="700"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const msgEl = document.getElementById('msg');
+
+        let gameState = 'START'; // START, PLAYING, GAMEOVER
+        let score = 0;
+        let keys = {};
+        let player = { x: 275, y: 620, w: 40, h: 40, cooldown: 0 };
+        let bullets = [];
+        let enemies = [];
+        let particles = [];
+        let enemyBullets = [];
+        let stars = Array.from({length: 100}, () => ({x: Math.random()*600, y: Math.random()*700, s: Math.random()*2}));
+
+        window.addEventListener('keydown', e => keys[e.code] = true);
+        window.addEventListener('keyup', e => keys[e.code] = false);
+
+        function createEnemy() {
+            for(let i=0; i<6; i++) {
+                enemies.push({ x: 50 + i*90, y: 50, w: 30, h: 30, color: '#f00' });
+            }
+        }
+
+        function drawShip(x, y, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(x + 20, y);
+            ctx.lineTo(x + 40, y + 40);
+            ctx.lineTo(x + 20, y + 30);
+            ctx.lineTo(x, y + 40);
+            ctx.fill();
+        }
+
+        function update() {
+            if (gameState === 'START' && keys['Space']) {
+                gameState = 'PLAYING';
+                msgEl.innerText = '';
+                createEnemy();
+            }
+
+            if (gameState !== 'PLAYING') return;
+
+            // Background Stars
+            stars.forEach(s => s.y = (s.y + s.s) % 700);
+
+            // Player Logic
+            if (keys['ArrowLeft'] && player.x > 0) player.x -= 6;
+            if (keys['ArrowRight'] && player.x < 560) player.x += 6;
+            if (keys['Space'] && player.cooldown <= 0) {
+                bullets.push({ x: player.x + 18, y: player.y });
+                player.cooldown = 15;
+            }
+            if (player.cooldown > 0) player.cooldown--;
+
+            // Bullets
+            bullets.forEach((b, i) => {
+                b.y -= 10;
+                if (b.y < 0) bullets.splice(i, 1);
+            });
+
+            // Enemy Logic
+            enemies.forEach((e, i) => {
+                e.y += 0.5;
+                if (Math.random() < 0.005) enemyBullets.push({x: e.x + 15, y: e.y + 30});
+                if (e.y > 650) gameState = 'GAMEOVER';
+                
+                bullets.forEach((b, bi) => {
+                    if (b.x > e.x && b.x < e.x + e.w && b.y > e.y && b.y < e.y + e.h) {
+                        enemies.splice(i, 1);
+                        bullets.splice(bi, 1);
+                        score += 100;
+                        scoreEl.innerText = 'Score: ' + score;
+                        for(let k=0; k<10; k++) particles.push({x: e.x, y: e.y, vx: (Math.random()-0.5)*10, vy: (Math.random()-0.5)*10, life: 20});
+                    }
+                });
+            });
+
+            // Enemy Bullets
+            enemyBullets.forEach((b, i) => {
+                b.y += 5;
+                if (b.x > player.x && b.x < player.x + 40 && b.y > player.y && b.y < player.y + 40) gameState = 'GAMEOVER';
+                if (b.y > 700) enemyBullets.splice(i, 1);
+            });
+
+            // Particles
+            particles.forEach((p, i) => {
+                p.x += p.vx; p.y += p.vy; p.life--;
+                if (p.life <= 0) particles.splice(i, 1);
+            });
+
+            if (enemies.length === 0) createEnemy();
+            if (gameState === 'GAMEOVER') msgEl.innerText = 'GAME OVER! Press F5 to Restart';
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, 600, 700);
+            
+            // Draw Stars
+            ctx.fillStyle = 'white';
+            stars.forEach(s => ctx.fillRect(s.x, s.y, s.s, s.s));
+
+            // Draw Entities
+            drawShip(player.x, player.y, '#0f0');
+            ctx.fillStyle = 'yellow';
+            bullets.forEach(b => ctx.fillRect(b.x, b.y, 4, 10));
+            
+            ctx.fillStyle = 'red';
+            enemies.forEach(e => drawShip(e.x, e.y, '#f00'));
+            
+            ctx.fillStyle = 'orange';
+            enemyBullets.forEach(b => ctx.fillRect(b.x, b.y, 4, 10));
+
+            particles.forEach(p => { ctx.fillStyle = 'orange'; ctx.fillRect(p.x, p.y, 3, 3); });
+
+            requestAnimationFrame(() => { update(); draw(); });
+        }
+
+        draw();
+    </script>
+</body>
+</html>
