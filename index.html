@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Menu</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a1a, #2b2b2b);
+            color: white;
+            text-align: center;
+            margin: 0;
+        }
+
+        h1 {
+            margin-top: 30px;
+            font-size: 32px;
+        }
+
+        .menu {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 25px;
+            padding: 40px;
+        }
+
+        .game-card {
+            background-color: #333;
+            border-radius: 15px;
+            overflow: hidden;
+            text-decoration: none;
+            color: white;
+            transition: 0.25s;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+
+        .game-card:hover {
+            transform: scale(1.07);
+            background-color: #444;
+        }
+
+        .game-card img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            image-rendering: pixelated;
+        }
+
+        .game-title {
+            padding: 15px;
+            font-size: 18px;
+        }
+
+        /* NEW FOOTER STYLE */
+        .footer {
+            margin-top: 40px;
+            padding: 20px;
+            font-size: 18px;
+            color: #ddd;
+            background: rgba(0,0,0,0.3);
+        }
+
+        .footer span {
+            color: #00ffcc;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>🎮 Game Menu</h1>
+
+    <div class="menu">
+
+        <a href="minicraft.html" class="game-card">
+            <img src="MiniCraft.png" alt="MiniCraft">
+            <div class="game-title">MiniCraft</div>
+        </a>
+
+        <a href="Galaga.html" class="game-card">
+            <img src="galaga.png" alt="Galaga">
+            <div class="game-title">Galiga</div>
+        </a>
+
+        <a href="Space.html" class="game-card">
+            <img src="space.png" alt="Galaga II">
+            <div class="game-title">Space Invaders</div>
+        </a>
+
+        <a href="Game.html" class="game-card">
+            <img src="game.png" alt="Void Ship Runner">
+            <div class="game-title">Void Ship Runner</div>
+        </a>
+    </div>
+
+    <!-- NICE DONATION MESSAGE -->
+    <div class="footer">
+        💖 <span>Please donate to support our games!</span><br>
+        Your support helps us create more awesome experiences 🎮
+    </div>
+
+</body>
+</html>
