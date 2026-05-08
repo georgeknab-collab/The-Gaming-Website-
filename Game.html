@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Void Runner: Neon 3D</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #ui-container {
+            position: absolute; top: 20px; width: 100%; display: flex; 
+            justify-content: space-between; padding: 0 40px; box-sizing: border-box;
+            color: #0ff; font-weight: bold; pointer-events: none;
+            text-shadow: 0 0 10px #0ff; letter-spacing: 2px;
+        }
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 20px; height: 20px; border: 2px solid rgba(0, 255, 255, 0.3);
+            border-radius: 50%; pointer-events: none;
+        }
+        #game-over {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9); color: #f0f; padding: 40px;
+            border: 2px solid #f0f; display: none; text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui-container">
+        <div>SCORE: <span id="score">0</span></div>
+        <div>STABILITY: <span id="health">100%</span></div>
+    </div>
+    <div id="crosshair"></div>
+    <div id="game-over">
+        <h1>CRITICAL FAILURE</h1>
+        <p>Your ship was lost to the void.</p>
+        <button onclick="location.reload()" style="background:#f0f; border:none; padding:10px 20px; cursor:pointer;">REBOOT SYSTEM</button>
+    </div>
+
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- Core Engine ---
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x000000, 0.02);
+        
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        // --- Lighting ---
+        const ambient = new THREE.AmbientLight(0x404040, 2);
+        scene.add(ambient);
+        const pointLight = new THREE.PointLight(0x00ffff, 5, 50);
+        scene.add(pointLight);
+
+        // --- Player Ship (Better Mesh) ---
+        const shipGroup = new THREE.Group();
+        const bodyGeo = new THREE.ConeGeometry(0.4, 1.2, 4);
+        const wingGeo = new THREE.BoxGeometry(1.5, 0.1, 0.5);
+        const neonMat = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 2 });
+        
+        const body = new THREE.Mesh(bodyGeo, neonMat);
+        body.rotation.x = Math.PI / 2;
+        const wings = new THREE.Mesh(wingGeo, neonMat);
+        
+        shipGroup.add(body);
+        shipGroup.add(wings);
+        scene.add(shipGroup);
+
+        camera.position.set(0, 1.5, 5);
+
+        // --- Starfield (Warp Effect) ---
+        const starCount = 2000;
+        const starGeo = new THREE.BufferGeometry();
+        const starPositions = new Float32Array(starCount * 3);
+        const starVelocities = new Float32Array(starCount);
+        
+        for(let i=0; i<starCount * 3; i+=3) {
+            starPositions[i] = (Math.random() - 0.5) * 100;
+            starPositions[i+1] = (Math.random() - 0.5) * 100;
+            starPositions[i+2] = (Math.random() - 1) * 100;
+            starVelocities[i/3] = Math.random() * 0.5 + 0.1;
+        }
+        starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        const starMat = new THREE.PointsMaterial({ size: 0.05, color: 0xffffff, transparent: true });
+        const stars = new THREE.Points(starGeo, starMat);
+        scene.add(stars);
+
+        // --- Game Logic Constants ---
+        let score = 0;
+        let gameActive = true;
+        const obstacles = [];
+        const bullets = [];
+        const keys = { w: false, a: false, s: false, d: false };
+        let currentSpeed = 0.4;
+        let tilt = 0;
+
+        // --- Obstacle Generation ---
+        function createObstacle() {
+            const size = Math.random() * 1.5 + 0.5;
+            const geo = new THREE.IcosahedronGeometry(size, 0);
+            const mat = new THREE.MeshStandardMaterial({ 
+                color: 0x222222, 
+                flatShading: true,
+                emissive: 0xff00ff,
+                emissiveIntensity: 0.1
+            });
+            const obs = new THREE.Mesh(geo, mat);
+            obs.position.set((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 20, -100);
+            scene.add(obs);
+            obstacles.push(obs);
+        }
+
+        // --- Input Handling ---
+        window.addEventListener('keydown', (e) => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true; });
+        window.addEventListener('keyup', (e) => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false; });
+        window.addEventListener('mousedown', fireBullet);
+
+        function fireBullet() {
+            if(!gameActive) return;
+            const bGeo = new THREE.CylinderGeometry(0.05, 0.05, 1, 8);
+            const bMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const b = new THREE.Mesh(bGeo, bMat);
+            b.rotation.x = Math.PI / 2;
+            b.position.copy(shipGroup.position);
+            scene.add(b);
+            bullets.push(b);
+        }
+
+        // --- Main Animation Loop ---
+        function update() {
+            if (!gameActive) return;
+
+            // 1. Ship Movement & Tilting
+            const moveX = (keys.d ? 0.15 : 0) - (keys.a ? 0.15 : 0);
+            const moveY = (keys.w ? 0.15 : 0) - (keys.s ? 0.15 : 0);
+            
+            shipGroup.position.x += moveX;
+            shipGroup.position.y += moveY;
+            
+            // Constrain Player
+            shipGroup.position.x = Math.max(Math.min(shipGroup.position.x, 10), -10);
+            shipGroup.position.y = Math.max(Math.min(shipGroup.position.y, 8), -8);
+
+            // Dynamic Roll
+            tilt = THREE.MathUtils.lerp(tilt, -moveX * 5, 0.1);
+            shipGroup.rotation.z = tilt;
+            shipGroup.rotation.y = tilt * 0.5;
+
+            // 2. Camera & Light Follow
+            camera.position.x = THREE.MathUtils.lerp(camera.position.x, shipGroup.position.x * 0.5, 0.05);
+            camera.position.y = THREE.MathUtils.lerp(camera.position.y, shipGroup.position.y * 0.5 + 1.5, 0.05);
+            pointLight.position.copy(shipGroup.position);
+
+            // 3. Warp Stars
+            const positions = stars.geometry.attributes.position.array;
+            for(let i=0; i<starCount * 3; i+=3) {
+                positions[i+2] += currentSpeed * 2;
+                if(positions[i+2] > 5) positions[i+2] = -100;
+            }
+            stars.geometry.attributes.position.needsUpdate = true;
+
+            // 4. Obstacles Logic
+            if (Math.random() < 0.08) createObstacle();
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].position.z += currentSpeed;
+                obstacles[i].rotation.x += 0.01;
+                
+                // Collision
+                if (obstacles[i].position.distanceTo(shipGroup.position) < 1.2) {
+                    gameActive = false;
+                    document.getElementById('game-over').style.display = 'block';
+                }
+
+                if (obstacles[i].position.z > 10) {
+                    scene.remove(obstacles[i]);
+                    obstacles.splice(i, 1);
+                    score++;
+                    document.getElementById('score').innerText = score;
+                    currentSpeed += 0.0005;
+                }
+            }
+
+            // 5. Bullets
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                bullets[i].position.z -= 1.5;
+                
+                for(let j = obstacles.length -1; j >= 0; j--) {
+                    if(bullets[i] && bullets[i].position.distanceTo(obstacles[j].position) < 2) {
+                        scene.remove(obstacles[j]);
+                        scene.remove(bullets[i]);
+                        obstacles.splice(j, 1);
+                        bullets.splice(i, 1);
+                        score += 5;
+                    }
+                }
+                
+                if(bullets[i] && bullets[i].position.z < -100) {
+                    scene.remove(bullets[i]);
+                    bullets.splice(i, 1);
+                }
+            }
+
+            renderer.render(scene, camera);
+            requestAnimationFrame(update);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        update();
+    </script>
+</body>
+</html>
